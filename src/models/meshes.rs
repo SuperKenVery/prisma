@@ -1,16 +1,11 @@
 use encase::StorageBuffer;
-use glam::Vec3;
-use tobj::{LoadError, LoadOptions};
 
-use crate::{
-    core::{Primitive, Vertex},
-    render::RenderContext,
-};
+use crate::{core::Vertex, render::RenderContext};
 
 #[derive(Default)]
 pub struct Meshes {
-    pub vertices: Vec<Vertex>,
-    pub offsets: Vec<u32>,
+    vertices: Vec<Vertex>,
+    offsets: Vec<u32>,
 }
 
 impl Meshes {
@@ -18,51 +13,14 @@ impl Meshes {
         Self::default()
     }
 
-    pub fn load_model(&mut self, path: &str) -> Result<Vec<Primitive>, LoadError> {
-        let (models, _materials) = tobj::load_obj(
-            path,
-            &LoadOptions {
-                single_index: true,
-                triangulate: true,
-                ..Default::default()
-            },
-        )?;
+    pub fn get_vertex(&self, idx: u32, vertex: u32) -> Vertex {
+        self.vertices[(vertex + self.offsets[idx as usize]) as usize]
+    }
 
-        let mut primitives = Vec::new();
-        let mut offset = self.vertices.len() as u32;
-
-        for model in models {
-            let mesh = model.mesh;
-            for v in 0..mesh.positions.len() / 3 {
-                self.vertices.push(Vertex {
-                    pos: Vec3::new(
-                        mesh.positions[3 * v],
-                        mesh.positions[3 * v + 1],
-                        mesh.positions[3 * v + 2],
-                    ),
-                    normal: Vec3::new(
-                        mesh.normals[3 * v],
-                        mesh.normals[3 * v + 1],
-                        mesh.normals[3 * v + 2],
-                    ),
-                });
-            }
-
-            let idx = self.offsets.len() as u32;
-            for i in 0..mesh.indices.len() / 3 {
-                primitives.push(Primitive {
-                    idx,
-                    p0: mesh.indices[3 * i],
-                    p1: mesh.indices[3 * i + 1],
-                    p2: mesh.indices[3 * i + 2],
-                });
-            }
-
-            self.offsets.push(offset);
-            offset = self.vertices.len() as u32;
-        }
-
-        Ok(primitives)
+    pub fn add_mesh(&mut self, vertices: &mut Vec<Vertex>) -> u32 {
+        self.offsets.push(self.vertices.len() as u32);
+        self.vertices.append(vertices);
+        self.offsets.len() as u32 - 1
     }
 
     pub fn build(
