@@ -8,14 +8,13 @@ struct Material {
     emissive_texture: u32
 }
 
-fn material_brdf(intersection: Intersection, n: vec3f, wi: vec3f, wo: vec3f) -> vec3f {
+fn material_brdf(intersection: Intersection, n: vec3f, h: vec3f, wi: vec3f, wo: vec3f) -> vec3f {
     let material = materials[intersection.material];
     let base_color = sample_texture(material.base_color_texture, intersection.tex_coord);
     let metallic_roughness = sample_texture(material.metallic_roughness_texture, intersection.tex_coord);
     let metallic = metallic_roughness.b;
     let roughness = metallic_roughness.g;
 
-    let h = normalize(wi + wo);
     let vdoth = dot(wo, h);
     let ndoth = dot(n, h);
     let ndotl = dot(n, wi);
@@ -47,7 +46,7 @@ fn material_sample_h(intersection: Intersection, state: ptr<function, u32>, n: v
     let cosine_phi = cos(phi);
     let sine_phi = sin(phi);
 
-    let cosine_theta = sqrt((1.0 - ry) / (ry * (alpha2 - 1.0) + 1.0));
+    let cosine_theta = min(sqrt((1.0 - ry) / (ry * (alpha2 - 1.0) + 1.0)), 1.0);
     let sine_theta = sqrt(1.0 - cosine_theta * cosine_theta);
 
     let x = cosine_phi * sine_theta;
@@ -76,6 +75,9 @@ fn material_pdf(intersection: Intersection, n: vec3f, wo: vec3f, h: vec3f) -> f3
 fn microfacet_dist(alpha2: f32, ndoth: f32) -> f32 {
     var denom = ndoth * ndoth * (alpha2 - 1.0) + 1.0;
     denom *= PI * denom;
+    if denom == 0.0 {
+        return 0.0;
+    }
     return alpha2 / denom;
 }
 
