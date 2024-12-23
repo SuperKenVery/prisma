@@ -13,7 +13,7 @@ impl RenderContext {
         let mut limits = wgpu::Limits::downlevel_defaults();
         limits.max_bind_groups = 5;
         limits.max_push_constant_size = 4;
-        limits.max_texture_dimension_2d = 8192;
+        limits.max_texture_dimension_2d = 4096;
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
