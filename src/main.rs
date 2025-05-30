@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         console::style("[2/4]").bold().dim(),
         Emoji("📷 ", "")
     );
-    renderer.render(bind_group_set);
+    renderer.render(bind_group_set)?;
 
     println!(
         "{} {} Applying post-processing effects...",

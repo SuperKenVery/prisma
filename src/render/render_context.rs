@@ -12,25 +12,24 @@ impl RenderContext {
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .unwrap();
-        let mut limits = wgpu::Limits::downlevel_defaults();
-        limits.max_bind_groups = 5;
-        limits.max_push_constant_size = 4;
-        limits.max_texture_dimension_2d = 4096;
-        limits.max_binding_array_elements_per_shader_stage = 100;
+
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | wgpu::Features::PUSH_CONSTANTS
-                        | wgpu::Features::TEXTURE_BINDING_ARRAY
-                        | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-                    required_limits: limits,
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    trace: Trace::Off,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | wgpu::Features::PUSH_CONSTANTS
+                    | wgpu::Features::TEXTURE_BINDING_ARRAY
+                    | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                required_limits: wgpu::Limits {
+                    max_bind_groups: 5,
+                    max_push_constant_size: 4,
+                    max_texture_dimension_2d: 4096,
+                    max_binding_array_elements_per_shader_stage: 100,
+                    ..wgpu::Limits::downlevel_defaults()
                 },
-                // None,
-            )
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: Trace::Off,
+            })
             .await?;
 
         Ok(Self { device, queue })

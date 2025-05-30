@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{error::Error, rc::Rc, sync::Arc};
 
 use indicatif::ProgressBar;
 
@@ -75,9 +75,6 @@ impl Renderer {
         let shader_module =
             device.create_shader_module(wgpu::include_wgsl!("../../shaders-generated/render.wgsl"));
 
-        let mut constants = HashMap::new();
-        constants.insert(String::from("MAX_DEPTH"), config.depth as f64);
-
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
@@ -86,7 +83,6 @@ impl Renderer {
             compilation_options: wgpu::PipelineCompilationOptions {
                 constants: &[("MAX_DEPTH", config.depth as f64)],
                 zero_initialize_workgroup_memory: true,
-                // vertex_pulling_transform: false,
             },
             cache: None,
         });
@@ -117,7 +113,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self, bind_group_set: BindGroupSet) {
+    pub fn render(&self, bind_group_set: BindGroupSet) -> Result<(), Box<dyn Error>> {
         let device = self.context.device();
         let queue = self.context.queue();
 
@@ -162,8 +158,10 @@ impl Renderer {
             queue.on_submitted_work_done(move || progress_bar.inc(1));
         }
 
-        device.poll(wgpu::MaintainBase::Wait);
+        device.poll(wgpu::MaintainBase::Wait)?;
         progress_bar.finish_and_clear();
+
+        Ok(())
     }
 
     pub fn render_target(&self) -> &wgpu::Texture {

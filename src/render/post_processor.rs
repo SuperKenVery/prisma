@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, rc::Rc, sync::mpsc};
+use std::{error::Error, rc::Rc, sync::mpsc};
 
 use image::RgbaImage;
 
@@ -60,9 +60,6 @@ impl PostProcessor {
         let shader_module = device.create_shader_module(wgpu::include_wgsl!(
             "../../shaders-generated/post_process.wgsl"
         ));
-
-        let mut constants = HashMap::new();
-        constants.insert(String::from("NUM_SAMPLES"), config.samples as f64);
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -158,15 +155,15 @@ impl PostProcessor {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &self.dst_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &staging_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_width * 4),
                     rows_per_image: None,
@@ -184,7 +181,7 @@ impl PostProcessor {
         let (tx, rx) = mpsc::channel();
         let slice = staging_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
-        device.poll(wgpu::MaintainBase::Wait);
+        device.poll(wgpu::MaintainBase::Wait)?;
         rx.recv()??;
 
         let mut buffer = Vec::new();
