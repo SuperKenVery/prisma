@@ -1,10 +1,7 @@
-use std::{error::Error, rc::Rc, sync::mpsc};
-
-use image::RgbaImage;
-
+use super::{align, RenderContext};
 use crate::config::{Config, Size};
-
-use super::RenderContext;
+use image::RgbaImage;
+use std::{error::Error, rc::Rc, sync::mpsc};
 
 pub struct PostProcessor {
     context: Rc<RenderContext>,
@@ -22,8 +19,8 @@ impl PostProcessor {
         let device = context.device();
 
         let Size { width, height } = config.size;
-        let aligned_width = (width + 15) / 16 * 16;
-        let aligned_height = (height + 15) / 16 * 16;
+        let aligned_width = align(width, 16);
+        let aligned_height = align(height, 16);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -144,7 +141,7 @@ impl PostProcessor {
         let device = self.context.device();
         let queue = self.context.queue();
 
-        let padded_width = (self.width + 63) / 64 * 64;
+        let padded_width = align(self.width, 64);
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: (padded_width * self.height * 4) as u64,

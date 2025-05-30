@@ -1,10 +1,7 @@
-use std::{error::Error, rc::Rc, sync::Arc};
-
-use indicatif::ProgressBar;
-
+use super::{align, RenderContext};
 use crate::config::{Config, Size};
-
-use super::RenderContext;
+use indicatif::ProgressBar;
+use std::{error::Error, rc::Rc, sync::Arc};
 
 pub struct Renderer {
     context: Rc<RenderContext>,
@@ -39,8 +36,8 @@ impl Renderer {
         let device = context.device();
 
         let Size { width, height } = config.size;
-        let width = (width + 15) / 16 * 16;
-        let height = (height + 15) / 16 * 16;
+        let width = align(width, 16);
+        let height = align(height, 16);
 
         let target_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
