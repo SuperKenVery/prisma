@@ -1,3 +1,5 @@
+use wgpu::Trace;
+
 pub struct RenderContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -14,6 +16,7 @@ impl RenderContext {
         limits.max_bind_groups = 5;
         limits.max_push_constant_size = 4;
         limits.max_texture_dimension_2d = 4096;
+        limits.max_binding_array_elements_per_shader_stage = 100;
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -24,8 +27,9 @@ impl RenderContext {
                         | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
                     required_limits: limits,
                     memory_hints: wgpu::MemoryHints::Performance,
+                    trace: Trace::Off,
                 },
-                None,
+                // None,
             )
             .await?;
 

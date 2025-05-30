@@ -68,11 +68,11 @@ impl PostProcessor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader_module,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &constants,
+                constants: &[("NUM_SAMPLES", config.samples as f64)],
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
+                // vertex_pulling_transform: false,
             },
             cache: None,
         });
@@ -184,7 +184,7 @@ impl PostProcessor {
         let (tx, rx) = mpsc::channel();
         let slice = staging_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
-        device.poll(wgpu::Maintain::Wait).panic_on_timeout();
+        device.poll(wgpu::MaintainBase::Wait);
         rx.recv()??;
 
         let mut buffer = Vec::new();

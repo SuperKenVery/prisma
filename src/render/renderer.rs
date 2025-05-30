@@ -82,11 +82,11 @@ impl Renderer {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader_module,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &constants,
+                constants: &[("MAX_DEPTH", config.depth as f64)],
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
+                // vertex_pulling_transform: false,
             },
             cache: None,
         });
@@ -162,7 +162,7 @@ impl Renderer {
             queue.on_submitted_work_done(move || progress_bar.inc(1));
         }
 
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::MaintainBase::Wait);
         progress_bar.finish_and_clear();
     }
 
