@@ -1,19 +1,17 @@
-use std::rc::Rc;
-
-use encase::{ShaderType, StorageBuffer, UniformBuffer};
-use glam::{Mat4, Quat, Vec3};
-use gltf::{buffer, camera::Projection, image, scene, Node};
-
+use self::bvh::Bvh;
 use crate::{
     config::Config,
     core::{Aabb3, Triangle},
     materials::Materials,
     primitives::Primitives,
-    render::RenderContext,
+    render::{BindGroupLayoutSet, BindGroupSet, RenderContext},
     textures::Textures,
 };
-
-use self::bvh::Bvh;
+use anyhow::Result;
+use encase::{ShaderType, StorageBuffer, UniformBuffer};
+use glam::{Mat4, Quat, Vec3};
+use gltf::{buffer, camera::Projection, image, scene, Node};
+use std::{error::Error, rc::Rc};
 
 mod bvh;
 mod camera;
@@ -24,13 +22,18 @@ pub struct Scene {
     pub primitives: Primitives,
     pub materials: Materials,
     pub textures: Textures,
-    uniform: Uniform,
+    pub uniform: Uniform,
     triangle_infos: Vec<TriangleInfo>,
+
+    context: Rc<RenderContext>,
+    uniform_buffer: wgpu::Buffer,
+    pub bind_group_layout: BindGroupLayoutSet,
+    pub bind_group: BindGroupSet,
 }
 
 #[derive(Default, ShaderType)]
-struct Uniform {
-    camera: Camera,
+pub struct Uniform {
+    pub camera: Camera,
     hdri: u32,
 }
 
@@ -55,39 +58,79 @@ impl Transform {
 }
 
 impl Scene {
-    pub fn new(context: Rc<RenderContext>) -> Self {
-        Self {
-            primitives: Primitives::new(),
-            materials: Materials::new(),
-            textures: Textures::new(context),
-            uniform: Uniform::default(),
-            triangle_infos: Vec::new(),
-        }
-    }
-
-    pub fn set_hdri(&mut self, hdri: u32) -> &mut Self {
-        self.uniform.hdri = hdri;
-        self
-    }
-
-    pub fn load(
-        &mut self,
+    pub fn new(
+        context: Rc<RenderContext>,
         config: &Config,
         scene: &gltf::Scene,
         buffers: &[buffer::Data],
         images: &[image::Data],
-    ) {
-        for image in images {
-            self.textures.add_texture(image);
+    ) -> Result<Self> {
+        let mut primitives = Primitives::new();
+        let mut materials = Materials::new();
+        let mut textures = Textures::new(context.clone());
+        let mut uniform = Uniform::default();
+        let mut triangle_infos = Vec::new();
+
+        Self::load_images(&mut textures, images);
+        for node in scene.nodes() {
+            Self::load_nodes(
+                &mut materials,
+                &mut triangle_infos,
+                &mut primitives,
+                &mut uniform,
+                node,
+                config,
+                buffers,
+                &Mat4::IDENTITY,
+            );
         }
 
-        for node in scene.nodes() {
-            self.load_node(node, config, buffers, &Mat4::IDENTITY);
+        let hdri = textures.load_texture_hdr(&config.hdri)?;
+        uniform.hdri = hdri;
+
+        let (bind_group_layout, bind_group, uniform_buffer) =
+            Self::build(&uniform, &primitives, &mut triangle_infos, &context.clone())?;
+
+        let (scene_bind_group_layout, scene_bind_group) = (bind_group_layout, bind_group);
+        let (primitive_bind_group_layout, primitive_bind_group) = primitives.build(&context)?;
+        let (material_bind_group_layout, material_bind_group) = materials.build(&context)?;
+        let (texture_bind_group_layout, texture_bind_group) = textures.build();
+
+        Ok(Self {
+            primitives,
+            materials,
+            textures,
+            uniform,
+            triangle_infos,
+
+            context: context.clone(),
+            uniform_buffer,
+            bind_group: BindGroupSet {
+                scene: scene_bind_group,
+                primitive: primitive_bind_group,
+                material: material_bind_group,
+                texture: texture_bind_group,
+            },
+            bind_group_layout: BindGroupLayoutSet {
+                scene: scene_bind_group_layout,
+                primitive: primitive_bind_group_layout,
+                material: material_bind_group_layout,
+                texture: texture_bind_group_layout,
+            },
+        })
+    }
+
+    fn load_images(textures: &mut Textures, images: &[image::Data]) {
+        for image in images {
+            textures.add_texture(image);
         }
     }
 
-    fn load_node(
-        &mut self,
+    fn load_nodes(
+        materials: &mut Materials,
+        triangle_infos: &mut Vec<TriangleInfo>,
+        primitives: &mut Primitives,
+        uniform: &mut Uniform,
         node: Node,
         config: &Config,
         buffers: &[buffer::Data],
@@ -98,15 +141,14 @@ impl Scene {
 
         if let Some(mesh) = node.mesh() {
             for primitive in mesh.primitives() {
-                let material_idx = self.materials.add(&primitive.material()).unwrap();
-                self.triangle_infos.append(
-                    &mut self
-                        .primitives
+                let material_idx = materials.add(&primitive.material()).unwrap();
+                triangle_infos.append(
+                    &mut primitives
                         .add(buffers, &primitive, &transform, material_idx)
                         .unwrap()
                         .into_iter()
                         .map(|triangle| {
-                            let aabb = triangle.aabb(&self.primitives);
+                            let aabb = triangle.aabb(primitives);
                             TriangleInfo {
                                 triangle,
                                 aabb,
@@ -125,27 +167,37 @@ impl Scene {
                     camera_builder
                         .transform(transform_matrix)
                         .yfov(perspective.yfov());
-                    self.uniform.camera =
-                        camera_builder.build(config.size.width, config.size.height);
+                    uniform.camera = camera_builder.build(config.size.width, config.size.height);
                 }
                 _ => todo!(),
             }
         }
 
         for child in node.children() {
-            self.load_node(child, config, buffers, &transform_matrix);
+            Self::load_nodes(
+                materials,
+                triangle_infos,
+                primitives,
+                uniform,
+                child,
+                config,
+                buffers,
+                &transform_matrix,
+            );
         }
     }
 
     pub fn build(
-        &mut self,
+        uniform: &Uniform,
+        primitives: &Primitives,
+        triangle_infos: &mut Vec<TriangleInfo>,
         context: &RenderContext,
-    ) -> encase::internal::Result<(wgpu::BindGroupLayout, wgpu::BindGroup)> {
+    ) -> encase::internal::Result<(wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::Buffer)> {
         let device = context.device();
         let queue = context.queue();
 
         let mut wgsl_bytes = UniformBuffer::new(Vec::new());
-        wgsl_bytes.write(&self.uniform)?;
+        wgsl_bytes.write(uniform)?;
         let wgsl_bytes = wgsl_bytes.into_inner();
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -156,9 +208,8 @@ impl Scene {
         });
         queue.write_buffer(&uniform_buffer, 0, &wgsl_bytes);
 
-        let bvh = Bvh::new(&self.primitives, &mut self.triangle_infos);
-        let triangles: Vec<_> = self
-            .triangle_infos
+        let bvh = Bvh::new(primitives, triangle_infos);
+        let triangles: Vec<_> = triangle_infos
             .iter()
             .map(|triangle_info| triangle_info.triangle)
             .collect();
@@ -242,7 +293,19 @@ impl Scene {
             ],
         });
 
-        Ok((bind_group_layout, bind_group))
+        Ok((bind_group_layout, bind_group, uniform_buffer))
+    }
+
+    pub fn set_camera(&mut self, new_cam: Camera) -> Result<(), Box<dyn Error>> {
+        self.uniform.camera = new_cam;
+        let mut wgsl_bytes = UniformBuffer::new(Vec::new());
+        wgsl_bytes.write(&self.uniform)?;
+        let wgsl_bytes = wgsl_bytes.into_inner();
+
+        let queue = self.context.queue();
+        queue.write_buffer(&self.uniform_buffer, 0, &wgsl_bytes);
+
+        Ok(())
     }
 }
 

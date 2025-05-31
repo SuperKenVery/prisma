@@ -1,5 +1,6 @@
 use super::{align, RenderContext};
 use crate::config::{Config, Size};
+use anyhow::Result;
 use image::RgbaImage;
 use std::{error::Error, rc::Rc, sync::mpsc};
 
@@ -137,7 +138,7 @@ impl PostProcessor {
         queue.submit(Some(encoder.finish()));
     }
 
-    pub async fn retrieve_result(&self) -> Result<Option<RgbaImage>, Box<dyn Error>> {
+    pub async fn retrieve_result(&self) -> Result<Option<RgbaImage>> {
         let device = self.context.device();
         let queue = self.context.queue();
 

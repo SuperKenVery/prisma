@@ -1,8 +1,7 @@
-use std::{error::Error, slice};
-
-use crate::render::RenderContext;
-
 use super::Texture2;
+use crate::render::RenderContext;
+use anyhow::Result;
+use std::{error::Error, slice};
 
 pub struct TextureHdr {
     texture: wgpu::Texture,
@@ -10,12 +9,7 @@ pub struct TextureHdr {
 }
 
 impl TextureHdr {
-    pub fn new(
-        context: &RenderContext,
-        data: &[f32],
-        width: u32,
-        height: u32,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(context: &RenderContext, data: &[f32], width: u32, height: u32) -> Result<Self> {
         let device = context.device();
         let queue = context.queue();
 

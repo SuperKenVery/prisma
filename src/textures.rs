@@ -1,9 +1,8 @@
-use std::{error::Error, num::NonZeroU32, rc::Rc};
-
+use crate::render::RenderContext;
+use anyhow::Result;
 use gltf::image::Data;
 use image::ImageReader;
-
-use crate::render::RenderContext;
+use std::{error::Error, num::NonZeroU32, rc::Rc};
 
 mod texture;
 mod texture_hdr;
@@ -28,7 +27,7 @@ impl Textures {
         }
     }
 
-    pub fn load_texture_hdr(&mut self, path: &str) -> Result<u32, Box<dyn Error>> {
+    pub fn load_texture_hdr(&mut self, path: &str) -> Result<u32> {
         let image = ImageReader::open(path)?.decode()?.into_rgba32f();
         let width = image.width();
         let height = image.height();

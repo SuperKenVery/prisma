@@ -5,3 +5,4 @@ pub mod primitives;
 pub mod render;
 pub mod scene;
 pub mod textures;
+pub mod window;

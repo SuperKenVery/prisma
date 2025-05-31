@@ -37,6 +37,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     for (; depth < MAX_DEPTH; depth++) {
         var intersection = Intersection();
         if scene_intersect(ray, &intersection) {
+            // Materials
             intersection_flip_normal(&intersection, ray);
             let material = materials[intersection.material];
             let normal_in_tangent = sample_texture(material.normal_texture, intersection.tex_coord);
@@ -48,8 +49,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                 paths[depth].coefficient = vec3(0.0, 0.0, 0.0);
                 paths[depth].constant = vec3(0.0, 0.0, 0.0);
                 break;
-        }
+            }
 
+            // Choose reflection direction: diffuse or specular
             let wo = -normalize(ray.dir);
             var wi: vec3f;
             if rand(&rand_state) < 0.5 {
@@ -72,9 +74,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             ray.orig = ray_at(ray, intersection.t);
             ray.dir = wi;
 
+            // Integration
             paths[depth].coefficient = material_brdf(intersection, normal, h, wi, wo) / pdf;
             paths[depth].constant = vec3(0.0, 0.0, 0.0); //sample_texture(material.emissive_texture, intersection.tex_coord);
         } else {
+            // Background
             paths[depth].coefficient = sample_panorama(scene.hdri, normalize(ray.dir));
             paths[depth].constant = vec3(0.0, 0.0, 0.0);
             break;

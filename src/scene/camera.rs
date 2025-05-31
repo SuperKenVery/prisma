@@ -68,3 +68,29 @@ pub struct Camera {
     pix_dx: Vec3,
     pix_dy: Vec3,
 }
+
+impl Camera {
+    /// Returns a new camera which is a rotated version of self.
+    ///
+    /// ## Parameters
+    /// - `rot: Vec3` The x, y and z rotation angles, in degrees
+    pub fn with_rot(&self, rot: Vec3) -> Self {
+        let rot_x = rot.x.to_radians();
+        let rot_y = rot.y.to_radians();
+        let rot_z = rot.z.to_radians();
+
+        let rotation_x = Mat4::from_rotation_x(rot_x);
+        let rotation_y = Mat4::from_rotation_y(rot_y);
+        let rotation_z = Mat4::from_rotation_z(rot_z);
+
+        let rotation_matrix = rotation_z * rotation_y * rotation_x;
+        let new_transform = self.transform * rotation_matrix;
+
+        Camera {
+            transform: new_transform,
+            pix_orig: self.pix_orig,
+            pix_dx: self.pix_dx,
+            pix_dy: self.pix_dy,
+        }
+    }
+}

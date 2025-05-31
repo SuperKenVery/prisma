@@ -1,5 +1,6 @@
 use super::{align, RenderContext};
 use crate::config::{Config, Size};
+use anyhow::Result;
 use indicatif::ProgressBar;
 use std::{error::Error, rc::Rc, sync::Arc};
 
@@ -13,6 +14,7 @@ pub struct Renderer {
     render_target: wgpu::Texture,
 }
 
+#[derive(Clone)]
 pub struct BindGroupLayoutSet {
     pub scene: wgpu::BindGroupLayout,
     pub primitive: wgpu::BindGroupLayout,
@@ -20,6 +22,7 @@ pub struct BindGroupLayoutSet {
     pub texture: wgpu::BindGroupLayout,
 }
 
+#[derive(Clone)]
 pub struct BindGroupSet {
     pub scene: wgpu::BindGroup,
     pub primitive: wgpu::BindGroup,
@@ -110,7 +113,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self, bind_group_set: BindGroupSet) -> Result<(), Box<dyn Error>> {
+    pub fn render(&self, bind_group_set: BindGroupSet) -> Result<()> {
         let device = self.context.device();
         let queue = self.context.queue();
 

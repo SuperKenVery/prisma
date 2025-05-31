@@ -1,0 +1,9 @@
+// Static tasks configuration.
+//
+// Example:
+[
+  {
+    "label": "Render",
+    "command": "cargo run -- scenes/SciFiHelmet.glb --samples 30 && open output.png"
+  }
+]
