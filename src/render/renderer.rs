@@ -2,7 +2,9 @@ use super::{align, RenderContext};
 use crate::config::{Config, Size};
 use anyhow::Result;
 use indicatif::ProgressBar;
-use std::{error::Error, rc::Rc, sync::Arc};
+use log::{debug, trace};
+use std::{default::Default, error::Error, rc::Rc, sync::Arc};
+use wgpu::Texture;
 
 pub struct Renderer {
     context: Rc<RenderContext>,
@@ -11,7 +13,7 @@ pub struct Renderer {
     samples: u32,
     target_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::ComputePipeline,
-    render_target: wgpu::Texture,
+    pub render_target: wgpu::Texture,
 }
 
 #[derive(Clone)]
@@ -121,6 +123,7 @@ impl Renderer {
             .render_target
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        trace!("About to create bind group");
         let output_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.target_bind_group_layout,
@@ -129,6 +132,7 @@ impl Renderer {
                 resource: wgpu::BindingResource::TextureView(&view),
             }],
         });
+        trace!("Done creating bind group");
 
         let progress_bar = Arc::new(ProgressBar::new(self.samples as u64));
 

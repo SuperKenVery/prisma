@@ -45,24 +45,24 @@ fn main() -> Result<()> {
         console::style("[2/4]").bold().dim(),
         Emoji("📷 ", "")
     );
-    renderer.render(bind_group_set)?;
+    // renderer.render(bind_group_set)?;
 
-    info!(
-        "{} {} Applying post-processing effects...",
-        console::style("[3/4]").bold().dim(),
-        Emoji("🌟 ", "")
-    );
-    let post_processor = PostProcessor::new(context.clone(), &config);
-    post_processor.post_process(renderer.render_target());
+    // info!(
+    //     "{} {} Applying post-processing effects...",
+    //     console::style("[3/4]").bold().dim(),
+    //     Emoji("🌟 ", "")
+    // );
+    // let post_processor = PostProcessor::new(context.clone(), &config);
+    // post_processor.post_process(renderer.render_target());
 
-    window::show_window()?;
+    window::show_window(renderer, scene)?;
 
-    let image = pollster::block_on(post_processor.retrieve_result())?.unwrap();
-    info!(
-        "{} {} Exporting the image...",
-        console::style("[4/4]").bold().dim(),
-        Emoji("🎞️ ", "")
-    );
-    image.save(config.output)?;
+    // let image = pollster::block_on(post_processor.retrieve_result())?.unwrap();
+    // info!(
+    //     "{} {} Exporting the image...",
+    //     console::style("[4/4]").bold().dim(),
+    //     Emoji("🎞️ ", "")
+    // );
+    // image.save(config.output)?;
     Ok(())
 }

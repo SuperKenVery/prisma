@@ -4,6 +4,10 @@
 [
   {
     "label": "Render",
-    "command": "cargo run -- scenes/SciFiHelmet.glb --samples 30 && open output.png"
+    "command": "cargo run -- scenes/SciFiHelmet.glb --samples 30 && open output.png",
+    "env": {
+      "RUST_LOG": "prisma=trace",
+      "RUST_BACKTRACE": "1"
+    }
   }
 ]

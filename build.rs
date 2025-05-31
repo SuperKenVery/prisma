@@ -10,7 +10,7 @@ const INCLUDE_PREFIX: &str = "///#include";
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=shaders/");
 
-    let shader_files = ["render.wgsl", "post_process.wgsl"];
+    let shader_files = ["render.wgsl", "post_process.wgsl", "copy.wgsl"];
 
     std::fs::create_dir_all(SHADER_DIR)?;
     for file in shader_files {
