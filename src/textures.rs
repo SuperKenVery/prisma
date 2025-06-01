@@ -2,7 +2,7 @@ use crate::render::RenderContext;
 use anyhow::Result;
 use gltf::image::Data;
 use image::ImageReader;
-use std::{error::Error, num::NonZeroU32, rc::Rc};
+use std::{cell::RefCell, error::Error, num::NonZeroU32, rc::Rc};
 
 mod texture;
 mod texture_hdr;
@@ -10,7 +10,7 @@ mod texture_hdr;
 use self::{texture::Texture, texture_hdr::TextureHdr};
 
 pub struct Textures {
-    context: Rc<RenderContext>,
+    context: Rc<RefCell<RenderContext>>,
     registry: Vec<Rc<dyn Texture2>>,
 }
 
@@ -20,7 +20,7 @@ pub trait Texture2 {
 }
 
 impl Textures {
-    pub fn new(context: Rc<RenderContext>) -> Self {
+    pub fn new(context: Rc<RefCell<RenderContext>>) -> Self {
         Self {
             context,
             registry: Vec::new(),
@@ -32,7 +32,7 @@ impl Textures {
         let width = image.width();
         let height = image.height();
         self.registry.push(Rc::new(TextureHdr::new(
-            &self.context,
+            self.context.clone(),
             image.as_raw(),
             width,
             height,
@@ -65,7 +65,7 @@ impl Textures {
         }
 
         self.registry.push(Rc::new(Texture::new(
-            &self.context,
+            self.context.clone(),
             &data,
             image.width,
             image.height,
@@ -74,7 +74,8 @@ impl Textures {
     }
 
     pub fn build(&self) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let device = self.context.device();
+        let bcontext = self.context.borrow();
+        let device = bcontext.device();
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,

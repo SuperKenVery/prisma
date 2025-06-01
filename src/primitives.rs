@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use encase::StorageBuffer;
 use glam::{Vec2, Vec3};
 use gltf::{buffer::Data, Primitive};
@@ -72,10 +74,11 @@ impl Primitives {
 
     pub fn build(
         &self,
-        context: &RenderContext,
+        context: Rc<RefCell<RenderContext>>,
     ) -> encase::internal::Result<(wgpu::BindGroupLayout, wgpu::BindGroup)> {
-        let device = context.device();
-        let queue = context.queue();
+        let bcontext = context.borrow();
+        let device = bcontext.device();
+        let queue = bcontext.queue();
 
         let mut wgsl_bytes = StorageBuffer::new(Vec::new());
         wgsl_bytes.write(&self.vertices)?;

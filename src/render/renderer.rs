@@ -3,17 +3,17 @@ use crate::config::{Config, Size};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use log::{debug, trace};
-use std::{default::Default, error::Error, rc::Rc, sync::Arc};
-use wgpu::Texture;
+use std::{cell::RefCell, default::Default, error::Error, rc::Rc, sync::Arc};
+use wgpu::{Texture, TextureUsages};
 
 pub struct Renderer {
-    context: Rc<RenderContext>,
+    context: Rc<RefCell<RenderContext>>,
     width: u32,
     height: u32,
     samples: u32,
     target_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::ComputePipeline,
-    pub render_target: wgpu::Texture,
+    render_target: wgpu::Texture,
 }
 
 #[derive(Clone)]
@@ -34,11 +34,12 @@ pub struct BindGroupSet {
 
 impl Renderer {
     pub fn new(
-        context: Rc<RenderContext>,
+        context: Rc<RefCell<RenderContext>>,
         config: &Config,
         bind_group_layout_set: BindGroupLayoutSet,
     ) -> Self {
-        let device = context.device();
+        let bcontext = context.borrow();
+        let device = bcontext.device();
 
         let Size { width, height } = config.size;
         let width = align(width, 16);
@@ -90,7 +91,7 @@ impl Renderer {
         });
 
         let render_target = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("RayTracing renderer render target"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -104,8 +105,12 @@ impl Renderer {
             view_formats: &[],
         });
 
+        std::mem::drop(bcontext);
+        let mut mcontext = context.borrow_mut();
+        mcontext.rt_render_target.replace(render_target.clone());
+
         Self {
-            context,
+            context: context.clone(),
             width,
             height,
             samples: config.samples,
@@ -116,14 +121,14 @@ impl Renderer {
     }
 
     pub fn render(&self, bind_group_set: BindGroupSet) -> Result<()> {
-        let device = self.context.device();
-        let queue = self.context.queue();
+        let context = self.context.borrow();
+        let device = context.device();
+        let queue = context.queue();
 
         let view = self
             .render_target
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        trace!("About to create bind group");
         let output_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.target_bind_group_layout,
@@ -132,9 +137,8 @@ impl Renderer {
                 resource: wgpu::BindingResource::TextureView(&view),
             }],
         });
-        trace!("Done creating bind group");
 
-        let progress_bar = Arc::new(ProgressBar::new(self.samples as u64));
+        // let progress_bar = Arc::new(ProgressBar::new(self.samples as u64));
 
         for sample in 0..self.samples {
             let mut encoder =
@@ -157,13 +161,13 @@ impl Renderer {
                 compute_pass.dispatch_workgroups(self.width / 16, self.height / 16, 1);
             }
 
-            let progress_bar = progress_bar.clone();
+            // let progress_bar = progress_bar.clone();
             queue.submit(Some(encoder.finish()));
-            queue.on_submitted_work_done(move || progress_bar.inc(1));
+            // queue.on_submitted_work_done(move || progress_bar.inc(1));
         }
 
         device.poll(wgpu::MaintainBase::Wait)?;
-        progress_bar.finish_and_clear();
+        // progress_bar.finish_and_clear();
 
         Ok(())
     }

@@ -1,7 +1,7 @@
 use super::Texture2;
 use crate::render::RenderContext;
 use anyhow::Result;
-use std::{error::Error, slice};
+use std::{cell::RefCell, error::Error, rc::Rc, slice};
 
 pub struct TextureHdr {
     texture: wgpu::Texture,
@@ -9,9 +9,15 @@ pub struct TextureHdr {
 }
 
 impl TextureHdr {
-    pub fn new(context: &RenderContext, data: &[f32], width: u32, height: u32) -> Result<Self> {
-        let device = context.device();
-        let queue = context.queue();
+    pub fn new(
+        context: Rc<RefCell<RenderContext>>,
+        data: &[f32],
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        let bcontext = context.borrow();
+        let device = bcontext.device();
+        let queue = bcontext.queue();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,

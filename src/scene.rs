@@ -11,7 +11,9 @@ use anyhow::Result;
 use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Mat4, Quat, Vec3};
 use gltf::{buffer, camera::Projection, image, scene, Node};
-use std::{error::Error, rc::Rc};
+use indicatif::ProgressBar;
+use std::time::Duration;
+use std::{cell::RefCell, error::Error, rc::Rc};
 
 mod bvh;
 mod camera;
@@ -25,7 +27,7 @@ pub struct Scene {
     pub uniform: Uniform,
     triangle_infos: Vec<TriangleInfo>,
 
-    context: Rc<RenderContext>,
+    context: Rc<RefCell<RenderContext>>,
     uniform_buffer: wgpu::Buffer,
     pub bind_group_layout: BindGroupLayoutSet,
     pub bind_group: BindGroupSet,
@@ -59,7 +61,7 @@ impl Transform {
 
 impl Scene {
     pub fn new(
-        context: Rc<RenderContext>,
+        context: Rc<RefCell<RenderContext>>,
         config: &Config,
         scene: &gltf::Scene,
         buffers: &[buffer::Data],
@@ -89,11 +91,12 @@ impl Scene {
         uniform.hdri = hdri;
 
         let (bind_group_layout, bind_group, uniform_buffer) =
-            Self::build(&uniform, &primitives, &mut triangle_infos, &context.clone())?;
+            Self::build(&uniform, &primitives, &mut triangle_infos, context.clone())?;
 
         let (scene_bind_group_layout, scene_bind_group) = (bind_group_layout, bind_group);
-        let (primitive_bind_group_layout, primitive_bind_group) = primitives.build(&context)?;
-        let (material_bind_group_layout, material_bind_group) = materials.build(&context)?;
+        let (primitive_bind_group_layout, primitive_bind_group) =
+            primitives.build(context.clone())?;
+        let (material_bind_group_layout, material_bind_group) = materials.build(context.clone())?;
         let (texture_bind_group_layout, texture_bind_group) = textures.build();
 
         Ok(Self {
@@ -191,10 +194,11 @@ impl Scene {
         uniform: &Uniform,
         primitives: &Primitives,
         triangle_infos: &mut Vec<TriangleInfo>,
-        context: &RenderContext,
+        context: Rc<RefCell<RenderContext>>,
     ) -> encase::internal::Result<(wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::Buffer)> {
-        let device = context.device();
-        let queue = context.queue();
+        let bcontext = context.borrow();
+        let device = bcontext.device();
+        let queue = bcontext.queue();
 
         let mut wgsl_bytes = UniformBuffer::new(Vec::new());
         wgsl_bytes.write(uniform)?;
@@ -297,12 +301,13 @@ impl Scene {
     }
 
     pub fn set_camera(&mut self, new_cam: Camera) -> Result<(), Box<dyn Error>> {
+        let context = self.context.borrow();
         self.uniform.camera = new_cam;
         let mut wgsl_bytes = UniformBuffer::new(Vec::new());
         wgsl_bytes.write(&self.uniform)?;
         let wgsl_bytes = wgsl_bytes.into_inner();
 
-        let queue = self.context.queue();
+        let queue = context.queue();
         queue.write_buffer(&self.uniform_buffer, 0, &wgsl_bytes);
 
         Ok(())
@@ -322,4 +327,24 @@ fn transform_to_matrix(transform: &scene::Transform) -> Mat4 {
             Vec3::from_array(*translation),
         ),
     }
+}
+
+pub fn build_scene(context: Rc<RefCell<RenderContext>>, config: &Config) -> Result<Scene> {
+    let bar = ProgressBar::new_spinner();
+    bar.enable_steady_tick(Duration::from_millis(100));
+    bar.set_message("Parsing and loading the scene...");
+
+    let (document, buffers, images) = gltf::import(&config.scene)?;
+
+    let scene = Scene::new(
+        context.clone(),
+        config,
+        &document.scenes().next().unwrap(),
+        &buffers,
+        &images,
+    )?;
+
+    bar.finish();
+
+    Ok(scene)
 }

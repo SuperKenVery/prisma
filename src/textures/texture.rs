@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::render::RenderContext;
 
 use super::Texture2;
@@ -8,9 +10,10 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(context: &RenderContext, data: &[u8], width: u32, height: u32) -> Self {
-        let device = context.device();
-        let queue = context.queue();
+    pub fn new(context: Rc<RefCell<RenderContext>>, data: &[u8], width: u32, height: u32) -> Self {
+        let bcontext = context.borrow();
+        let device = bcontext.device();
+        let queue = bcontext.queue();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,

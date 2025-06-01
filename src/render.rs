@@ -1,7 +1,9 @@
+mod copy_to_screen;
 mod post_processor;
 mod render_context;
 mod renderer;
 
+pub use copy_to_screen::CopyToScreen;
 pub use post_processor::PostProcessor;
 pub use render_context::RenderContext;
 pub use renderer::{BindGroupLayoutSet, BindGroupSet, Renderer};

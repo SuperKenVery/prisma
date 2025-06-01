@@ -2,22 +2,25 @@ use super::{align, RenderContext};
 use crate::config::{Config, Size};
 use anyhow::Result;
 use image::RgbaImage;
-use std::{error::Error, rc::Rc, sync::mpsc};
+use std::{cell::RefCell, error::Error, rc::Rc, sync::mpsc};
 
 pub struct PostProcessor {
-    context: Rc<RenderContext>,
+    context: Rc<RefCell<RenderContext>>,
     width: u32,
     height: u32,
     aligned_width: u32,
     aligned_height: u32,
+
     bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
     pipeline: wgpu::ComputePipeline,
     dst_texture: wgpu::Texture,
 }
 
 impl PostProcessor {
-    pub fn new(context: Rc<RenderContext>, config: &Config) -> Self {
-        let device = context.device();
+    pub fn new(context: Rc<RefCell<RenderContext>>, config: &Config) -> Self {
+        let bcontext = context.borrow();
+        let device = bcontext.device();
 
         let Size { width, height } = config.size;
         let aligned_width = align(width, 16);
@@ -31,7 +34,7 @@ impl PostProcessor {
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::ReadOnly,
-                        format: wgpu::TextureFormat::Rgba16Float,
+                        format: wgpu::TextureFormat::Rgba32Float,
                         view_dimension: wgpu::TextureViewDimension::D2,
                     },
                     count: None,
@@ -73,7 +76,7 @@ impl PostProcessor {
         });
 
         let dst_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("Post process render target"),
             size: wgpu::Extent3d {
                 width: aligned_width,
                 height: aligned_height,
@@ -83,34 +86,22 @@ impl PostProcessor {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 
-        Self {
-            context,
-            width,
-            height,
-            aligned_width,
-            aligned_height,
-            bind_group_layout,
-            pipeline,
-            dst_texture,
-        }
-    }
-
-    pub fn post_process(&self, src_texture: &wgpu::Texture) {
-        let device = self.context.device();
-        let queue = self.context.queue();
-
-        let src_view = src_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let dst_view = self
-            .dst_texture
+        let src_view = bcontext
+            .rt_render_target
+            .as_ref()
+            .unwrap()
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &self.bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -123,6 +114,28 @@ impl PostProcessor {
             ],
         });
 
+        std::mem::drop(bcontext);
+        let mut mut_context = context.borrow_mut();
+        mut_context.postprocess_target.replace(dst_texture.clone());
+
+        Self {
+            context: context.clone(),
+            width,
+            height,
+            aligned_width,
+            aligned_height,
+            bind_group_layout,
+            bind_group,
+            pipeline,
+            dst_texture,
+        }
+    }
+
+    pub fn post_process(&self) {
+        let context = self.context.borrow();
+        let device = context.device();
+        let queue = context.queue();
+
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         {
@@ -131,7 +144,7 @@ impl PostProcessor {
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, &bind_group, &[]);
+            compute_pass.set_bind_group(0, &self.bind_group, &[]);
             compute_pass.dispatch_workgroups(self.aligned_width / 16, self.aligned_height / 16, 1);
         }
 
@@ -139,8 +152,9 @@ impl PostProcessor {
     }
 
     pub async fn retrieve_result(&self) -> Result<Option<RgbaImage>> {
-        let device = self.context.device();
-        let queue = self.context.queue();
+        let context = self.context.borrow();
+        let device = context.device();
+        let queue = context.queue();
 
         let padded_width = align(self.width, 64);
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {

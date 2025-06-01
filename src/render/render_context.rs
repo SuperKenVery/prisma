@@ -1,8 +1,11 @@
-use wgpu::Trace;
+use wgpu::{Device, Queue, Trace};
 
 pub struct RenderContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
+
+    pub rt_render_target: Option<wgpu::Texture>,
+    pub postprocess_target: Option<wgpu::Texture>,
 }
 
 impl RenderContext {
@@ -32,7 +35,21 @@ impl RenderContext {
             })
             .await?;
 
-        Ok(Self { device, queue })
+        Ok(Self {
+            device,
+            queue,
+            rt_render_target: None,
+            postprocess_target: None,
+        })
+    }
+
+    pub fn from_existing(device: Device, queue: Queue) -> Self {
+        Self {
+            device,
+            queue,
+            rt_render_target: None,
+            postprocess_target: None,
+        }
     }
 
     pub fn device(&self) -> &wgpu::Device {
